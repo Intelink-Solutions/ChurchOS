@@ -1,12 +1,13 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
+import { toast } from "sonner";
 
 export default function ForgotPasswordPage() {
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [isSubmitted, setIsSubmitted] = useState(false);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -16,48 +17,15 @@ export default function ForgotPasswordPage() {
     // Simulate API call
     await new Promise(resolve => setTimeout(resolve, 1000));
 
-    setIsSubmitted(true);
+    toast.success("OTP sent. Enter it to reset your password.");
+    navigate("/otp", {
+      state: {
+        email,
+        purpose: "PASSWORD_RESET",
+      },
+    });
     setIsLoading(false);
   };
-
-  if (isSubmitted) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-900 to-slate-800 flex items-center justify-center px-4 py-10">
-        <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-xl text-center">
-          <div className="mb-5">
-            <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
-              <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-            </div>
-            <h1 className="text-2xl font-semibold text-foreground">Check your email</h1>
-            <p className="text-sm text-muted-foreground mt-2">
-              We've sent password reset instructions to <strong>{email}</strong>
-            </p>
-          </div>
-
-          <div className="space-y-3">
-            <p className="text-xs text-muted-foreground">
-              Didn't receive the email? Check your spam folder or{" "}
-              <button
-                onClick={() => setIsSubmitted(false)}
-                className="text-primary hover:underline"
-              >
-                try again
-              </button>
-            </p>
-
-            <Link to="/login">
-              <Button variant="outline" className="w-full">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Sign In
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-900 to-slate-800 flex items-center justify-center px-4 py-10">
@@ -66,7 +34,7 @@ export default function ForgotPasswordPage() {
           <p className="text-xs uppercase tracking-[0.2em] text-primary">Reset password</p>
           <h1 className="text-2xl font-semibold text-foreground mt-2">Forgot your password?</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Enter your email address and we'll send you a link to reset your password.
+            Enter your email address and we will send a one-time passcode (OTP).
           </p>
         </div>
 
@@ -84,7 +52,7 @@ export default function ForgotPasswordPage() {
           </div>
 
           <Button type="submit" className="w-full mt-2" disabled={isLoading}>
-            {isLoading ? "Sending..." : "Send Reset Link"}
+            {isLoading ? "Sending..." : "Send OTP"}
           </Button>
         </form>
 

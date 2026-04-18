@@ -1,10 +1,9 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 export default function RegisterPage() {
-  const { login } = useAuth();
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     firstName: "",
@@ -45,8 +44,15 @@ export default function RegisterPage() {
     // Simulate API call
     await new Promise(resolve => setTimeout(resolve, 1000));
 
-    // For demo purposes, auto-login after registration
-    login(`${firstName} ${lastName}`, "user");
+    // OTP verification is required before activating a new account.
+    toast.success("Verification OTP sent to your email.");
+    navigate("/otp", {
+      state: {
+        email,
+        fullName: `${firstName} ${lastName}`,
+        purpose: "EMAIL_VERIFICATION",
+      },
+    });
     setIsLoading(false);
   };
 

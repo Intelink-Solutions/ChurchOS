@@ -29,6 +29,8 @@ import ProfilePage from "./pages/Profile";
 import AdminLoginPage from "./pages/AdminLogin";
 import RegisterPage from "./pages/Register";
 import ForgotPasswordPage from "./pages/ForgotPassword";
+import OtpVerificationPage from "./pages/OtpVerification";
+import ResetPasswordOtpPage from "./pages/ResetPasswordOtp";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { Navigate } from "react-router-dom";
 import Index from "./pages/Index";
@@ -75,6 +77,8 @@ const App = () => (
               <Route path="/admin/login" element={<AdminLoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+              <Route path="/otp" element={<OtpVerificationPage />} />
+              <Route path="/reset-password" element={<ResetPasswordOtpPage />} />
               <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
               {/* Public Website */}
               <Route path="/website" element={<PublicHome />} />

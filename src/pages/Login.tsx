@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Shield } from "lucide-react";
+import { loginUser } from "@/lib/api/authApi";
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -22,13 +23,26 @@ export default function LoginPage() {
     }
 
     setIsLoading(true);
+    try {
+      const response = await loginUser({
+        email: email.trim(),
+        password,
+      });
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 900));
+      const role = response.user.roleCode === "ADMIN" || response.user.roleCode === "SUPER_ADMIN" ? "admin" : "user";
+      const displayName = response.user.fullName || `${response.user.firstName} ${response.user.lastName}`.trim() || "Member";
 
-    // Demo login: any credentials are accepted for members
-    login(email.split("@")[0] || "Member", "user");
-    setIsLoading(false);
+      // Keep session tokens for follow-up authenticated API calls.
+      localStorage.setItem("churchos-access-token", response.accessToken);
+      localStorage.setItem("churchos-refresh-token", response.refreshToken);
+
+      login(displayName, role);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Login failed. Please try again.";
+      setError(message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

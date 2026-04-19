@@ -5,6 +5,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
+import { sendOtp, verifyOtp } from "@/lib/api/authApi";
 import type { OtpPurpose } from "@/types/userManagement";
 
 type OtpLocationState = {
@@ -76,41 +77,64 @@ export default function OtpVerificationPage() {
     }
 
     setIsLoading(true);
-    // Replace with API call: POST /api/auth/otp/verify
-    await new Promise((resolve) => setTimeout(resolve, 900));
-
-    if (purpose === "PASSWORD_RESET") {
-      navigate("/reset-password", {
-        state: {
-          email,
-          otpCode,
-        },
+    try {
+      const response = await verifyOtp({
+        destination: email.trim(),
+        purpose,
+        otpCode,
       });
-      setIsLoading(false);
-      return;
-    }
 
-    if (purpose === "EMAIL_VERIFICATION") {
-      toast.success("Email verified successfully. You can now sign in.");
+      if (!response.verified) {
+        setError("Invalid OTP. Please try again.");
+        return;
+      }
+
+      if (purpose === "PASSWORD_RESET") {
+        navigate("/reset-password", {
+          state: {
+            email,
+            otpCode,
+          },
+        });
+        return;
+      }
+
+      if (purpose === "EMAIL_VERIFICATION") {
+        toast.success("Email verified successfully. You can now sign in.");
+        navigate("/login");
+        return;
+      }
+
+      toast.success("OTP verified successfully.");
       navigate("/login");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "OTP verification failed.";
+      setError(message);
+      toast.error(message);
+    } finally {
       setIsLoading(false);
-      return;
     }
-
-    toast.success("OTP verified successfully.");
-    navigate("/login");
-    setIsLoading(false);
   };
 
   const handleResendOtp = async () => {
     if (!email.trim() || countdown > 0) return;
 
     setIsLoading(true);
-    // Replace with API call: POST /api/auth/otp/send
-    await new Promise((resolve) => setTimeout(resolve, 700));
-    setCountdown(RESEND_INTERVAL);
-    setIsLoading(false);
-    toast.success("A new OTP has been sent.");
+    try {
+      await sendOtp({
+        channel: "EMAIL",
+        destination: email.trim(),
+        purpose,
+      });
+      setCountdown(RESEND_INTERVAL);
+      toast.success("A new OTP has been sent.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not resend OTP.";
+      setError(message);
+      toast.error(message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

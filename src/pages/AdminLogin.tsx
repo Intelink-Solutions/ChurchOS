@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Shield, ArrowLeft } from "lucide-react";
+import { loginUser } from "@/lib/api/authApi";
 
 export default function AdminLoginPage() {
   const { login } = useAuth();
@@ -10,24 +11,37 @@ export default function AdminLoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setError("");
     if (!email.trim() || !password.trim()) return;
 
     setIsLoading(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    try {
+      const response = await loginUser({
+        email: email.trim(),
+        password,
+      });
 
-    // For demo purposes, accept admin@church.com / admin123
-    if (email === "admin@church.com" && password === "admin123") {
-      login("Admin", "admin");
-    } else {
-      alert("Invalid admin credentials. Use admin@church.com / admin123");
+      const isAdminRole = response.user.roleCode === "ADMIN" || response.user.roleCode === "SUPER_ADMIN";
+      if (!isAdminRole) {
+        setError("This account does not have administrator access.");
+        return;
+      }
+
+      const displayName = response.user.fullName || `${response.user.firstName} ${response.user.lastName}`.trim() || "Admin";
+
+      localStorage.setItem("churchos-access-token", response.accessToken);
+      localStorage.setItem("churchos-refresh-token", response.refreshToken);
+      login(displayName, "admin");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Admin login failed. Please try again.";
+      setError(message);
+    } finally {
       setIsLoading(false);
-      return;
     }
-    setIsLoading(false);
   };
 
   return (
@@ -41,6 +55,12 @@ export default function AdminLoginPage() {
           <h1 className="text-2xl font-semibold text-foreground mt-2">Admin Dashboard Access</h1>
           <p className="text-sm text-muted-foreground mt-1">Enter your administrator credentials.</p>
         </div>
+
+        {error ? (
+          <div className="mb-4 rounded-lg border border-red-400 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+            {error}
+          </div>
+        ) : null}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -84,7 +104,7 @@ export default function AdminLoginPage() {
 
         <div className="mt-2 text-center">
           <p className="text-xs text-muted-foreground">
-            Demo: admin@church.com / admin123
+            Use your administrator account credentials
           </p>
         </div>
       </div>

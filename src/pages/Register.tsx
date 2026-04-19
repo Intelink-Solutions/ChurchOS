@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { registerUser } from "@/lib/api/authApi";
 
 export default function RegisterPage() {
   const navigate = useNavigate();
@@ -13,6 +14,7 @@ export default function RegisterPage() {
     confirmPassword: "",
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData(prev => ({
@@ -23,6 +25,7 @@ export default function RegisterPage() {
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setError("");
     const { firstName, lastName, email, password, confirmPassword } = formData;
 
     if (!firstName.trim() || !lastName.trim() || !email.trim() || !password.trim()) {
@@ -41,19 +44,30 @@ export default function RegisterPage() {
     }
 
     setIsLoading(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    try {
+      await registerUser({
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        email: email.trim(),
+        password,
+      });
 
-    // OTP verification is required before activating a new account.
-    toast.success("Verification OTP sent to your email.");
-    navigate("/otp", {
-      state: {
-        email,
-        fullName: `${firstName} ${lastName}`,
-        purpose: "EMAIL_VERIFICATION",
-      },
-    });
-    setIsLoading(false);
+      // OTP verification is required before activating a new account.
+      toast.success("Verification OTP sent to your email.");
+      navigate("/otp", {
+        state: {
+          email,
+          fullName: `${firstName} ${lastName}`,
+          purpose: "EMAIL_VERIFICATION",
+        },
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Registration failed. Please try again.";
+      setError(message);
+      toast.error(message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -64,6 +78,12 @@ export default function RegisterPage() {
           <h1 className="text-2xl font-semibold text-foreground mt-2">Join Our Community</h1>
           <p className="text-sm text-muted-foreground mt-1">Create your member account to get started.</p>
         </div>
+
+        {error ? (
+          <div className="mb-3 rounded-lg border border-red-400 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+            {error}
+          </div>
+        ) : null}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">

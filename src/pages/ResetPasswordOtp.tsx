@@ -4,6 +4,7 @@ import { ArrowLeft, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { resetPasswordWithOtp } from "@/lib/api/authApi";
 
 type ResetLocationState = {
   email?: string;
@@ -43,12 +44,22 @@ export default function ResetPasswordOtpPage() {
     }
 
     setIsLoading(true);
-    // Replace with API call: POST /api/auth/password/reset-with-otp
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    setIsLoading(false);
+    try {
+      const response = await resetPasswordWithOtp({
+        email,
+        otpCode,
+        newPassword: password,
+      });
 
-    toast.success("Password reset successful. Sign in with your new password.");
-    navigate("/login");
+      toast.success(response.message || "Password reset successful. Sign in with your new password.");
+      navigate("/login");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not reset password. Please try again.";
+      setError(message);
+      toast.error(message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

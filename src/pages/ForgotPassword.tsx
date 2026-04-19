@@ -3,28 +3,37 @@ import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
+import { forgotPassword } from "@/lib/api/authApi";
 
 export default function ForgotPasswordPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setError("");
     if (!email.trim()) return;
 
     setIsLoading(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    try {
+      await forgotPassword(email.trim());
 
-    toast.success("OTP sent. Enter it to reset your password.");
-    navigate("/otp", {
-      state: {
-        email,
-        purpose: "PASSWORD_RESET",
-      },
-    });
-    setIsLoading(false);
+      toast.success("OTP sent. Enter it to reset your password.");
+      navigate("/otp", {
+        state: {
+          email,
+          purpose: "PASSWORD_RESET",
+        },
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unable to send OTP. Please try again.";
+      setError(message);
+      toast.error(message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -37,6 +46,12 @@ export default function ForgotPasswordPage() {
             Enter your email address and we will send a one-time passcode (OTP).
           </p>
         </div>
+
+        {error ? (
+          <div className="mb-3 rounded-lg border border-red-400 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+            {error}
+          </div>
+        ) : null}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>

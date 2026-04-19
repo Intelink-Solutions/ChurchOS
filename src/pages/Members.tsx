@@ -1,38 +1,184 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Plus, Upload, Search, Eye, Pencil, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AddMemberDialog } from "@/components/members/AddMemberDialog";
-
-const mockMembers = [
-  { id: "M001", name: "Grace Adeyemi", phone: "+234 801 234 5678", department: "Choir", type: "Member", status: "Active" },
-  { id: "M002", name: "Daniel Okafor", phone: "+234 802 345 6789", department: "Media Team", type: "Member", status: "Active" },
-  { id: "M003", name: "Sarah Johnson", phone: "+1 555 123 4567", department: "Youth Ministry", type: "New Member", status: "Active" },
-  { id: "M004", name: "Michael Eze", phone: "+234 803 456 7890", department: "Ushers", type: "Member", status: "Inactive" },
-  { id: "M005", name: "Esther Williams", phone: "+234 804 567 8901", department: "Children Ministry", type: "Visitor", status: "Active" },
-  { id: "M006", name: "David Okonkwo", phone: "+234 805 678 9012", department: "Evangelism", type: "Member", status: "Active" },
-  { id: "M007", name: "Joy Nwosu", phone: "+234 806 789 0123", department: "Prayer Team", type: "Member", status: "Active" },
-  { id: "M008", name: "Emmanuel Balogun", phone: "+234 807 890 1234", department: "Protocol", type: "Member", status: "Active" },
-];
+import { createMember, deleteMember, getMembers, updateMember } from "@/lib/api/userManagementApi";
+import type { MemberRecord } from "@/types/userManagement";
+import { toast } from "sonner";
 
 const statusColors: Record<string, string> = {
-  Active: "bg-success/10 text-success",
-  Inactive: "bg-destructive/10 text-destructive",
+  ACTIVE: "bg-success/10 text-success",
+  INACTIVE: "bg-destructive/10 text-destructive",
+  VISITOR: "bg-muted text-muted-foreground",
 };
 
 const typeColors: Record<string, string> = {
-  Member: "bg-primary/10 text-primary",
-  "New Member": "bg-accent/20 text-accent-foreground",
-  Visitor: "bg-muted text-muted-foreground",
+  MEMBER: "bg-primary/10 text-primary",
+  NEW_MEMBER: "bg-accent/20 text-accent-foreground",
+  VISITOR: "bg-muted text-muted-foreground",
+  TRANSFER: "bg-orange-500/10 text-orange-700",
 };
+
+function toMemberTypeLabel(type: MemberRecord["type"]) {
+  return type.split("_").join(" ").toLowerCase().replace(/\b\w/g, (s) => s.toUpperCase());
+}
+
+function toStatusLabel(status: string) {
+  return status.split("_").join(" ").toLowerCase().replace(/\b\w/g, (s) => s.toUpperCase());
+}
 
 export default function MembersPage() {
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [status, setStatus] = useState("ALL");
+  const [department, setDepartment] = useState("ALL");
+  const [page, setPage] = useState(1);
+  const [isLoading, setIsLoading] = useState(false);
+  const [members, setMembers] = useState<MemberRecord[]>([]);
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [error, setError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
+  const [activeActionId, setActiveActionId] = useState<string | null>(null);
+  const [editingMember, setEditingMember] = useState<MemberRecord | null>(null);
+  const [viewingMember, setViewingMember] = useState<MemberRecord | null>(null);
 
-  const filtered = mockMembers.filter((m) =>
-    m.name.toLowerCase().includes(search.toLowerCase())
-  );
+  useEffect(() => {
+    const fetchMembers = async () => {
+      setIsLoading(true);
+      setError("");
+      try {
+        const response = await getMembers({
+          page,
+          size: 10,
+          search: search.trim() || undefined,
+          status: status !== "ALL" ? status : undefined,
+          department: department !== "ALL" ? department : undefined,
+        });
+
+        setMembers(response.items);
+        setTotalItems(response.totalItems);
+        setTotalPages(Math.max(1, response.totalPages));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Unable to load members.";
+        setError(message);
+        toast.error(message);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchMembers();
+  }, [search, status, department, page, reloadKey]);
+
+  const handleSaveMember = async (payload: Partial<MemberRecord>) => {
+    if (editingMember) {
+      await updateMember(editingMember.id, payload);
+      toast.success("Member updated successfully.");
+    } else {
+      await createMember(payload);
+      toast.success("Member created successfully.");
+    }
+
+    setDialogOpen(false);
+    setEditingMember(null);
+    setPage(1);
+    setReloadKey((current) => current + 1);
+  };
+
+  const openCreateDialog = () => {
+    setEditingMember(null);
+    setDialogOpen(true);
+  };
+
+  const openEditDialog = (member: MemberRecord) => {
+    setEditingMember(member);
+    setDialogOpen(true);
+  };
+
+  const handleDialogOpenChange = (open: boolean) => {
+    setDialogOpen(open);
+    if (!open) {
+      setEditingMember(null);
+    }
+  };
+
+  const handleDeleteMember = async (member: MemberRecord) => {
+    const confirmed = window.confirm(`Delete ${member.fullName}?`);
+    if (!confirmed) return;
+
+    setActiveActionId(member.id);
+    try {
+      await deleteMember(member.id);
+      toast.success("Member deleted successfully.");
+      setReloadKey((current) => current + 1);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not delete member.";
+      toast.error(message);
+    } finally {
+      setActiveActionId(null);
+    }
+  };
+
+  const detailRows = viewingMember
+    ? [
+        ["Member ID", viewingMember.id],
+        ["Full Name", viewingMember.fullName],
+        ["Type", toMemberTypeLabel(viewingMember.type)],
+        ["Status", toStatusLabel(viewingMember.memberStatus ?? "ACTIVE")],
+        ["Phone", viewingMember.phone ?? "-"],
+        ["Email", viewingMember.email ?? "-"],
+        ["Gender", viewingMember.gender ? toStatusLabel(viewingMember.gender) : "-"],
+        ["Date of Birth", viewingMember.dateOfBirth ?? "-"],
+        ["Membership Date", viewingMember.membershipDate ?? "-"],
+        ["Departments", viewingMember.departments?.join(", ") ?? "-"],
+        ["Address", viewingMember.address ?? "-"],
+        ["Nationality", viewingMember.nationality ?? "-"],
+        ["Occupation", viewingMember.occupation ?? "-"],
+        ["Marital Status", viewingMember.maritalStatus ? toStatusLabel(viewingMember.maritalStatus) : "-"],
+        ["Spouse Name", viewingMember.spouseName ?? "-"],
+        ["Number of Children", viewingMember.numberOfChildren?.toString() ?? "-"],
+        ["Emergency Contact", viewingMember.emergencyContact ?? "-"],
+        ["Emergency Phone", viewingMember.emergencyPhone ?? "-"],
+        ["Born Again", viewingMember.bornAgain === undefined ? "-" : viewingMember.bornAgain ? "Yes" : "No"],
+        ["Baptism Status", viewingMember.baptismStatus ? toStatusLabel(viewingMember.baptismStatus) : "-"],
+        ["Baptism Date", viewingMember.baptismDate ?? "-"],
+        ["Worker Status", viewingMember.workerStatus ? toStatusLabel(viewingMember.workerStatus) : "-"],
+        [
+          "Foundation Class Completed",
+          viewingMember.foundationClassCompleted === undefined
+            ? "-"
+            : viewingMember.foundationClassCompleted
+            ? "Yes"
+            : "No",
+        ],
+        [
+          "Leadership Training Completed",
+          viewingMember.leadershipTrainingCompleted === undefined
+            ? "-"
+            : viewingMember.leadershipTrainingCompleted
+            ? "Yes"
+            : "No",
+        ],
+        ["Invited By", viewingMember.invitedBy ?? "-"],
+        ["First Visit Date", viewingMember.firstVisitDate ?? "-"],
+        ["How Did You Hear About Us", viewingMember.howDidYouHearAboutUs ?? "-"],
+        ["Original Branch", viewingMember.originalBranch ?? "-"],
+        ["Transfer Date", viewingMember.transferDate ?? "-"],
+        ["Transfer Reason", viewingMember.transferReason ?? "-"],
+        ["Additional Notes", viewingMember.additionalNotes ?? "-"],
+        ["Prayer Requests", viewingMember.prayerRequests ?? "-"],
+      ]
+    : [];
+
+  const departmentOptions = useMemo(() => {
+    const unique = new Set<string>();
+    members.forEach((member) => {
+      member.departments?.forEach((item) => unique.add(item));
+    });
+    return Array.from(unique);
+  }, [members]);
 
   return (
     <DashboardLayout>
@@ -47,7 +193,7 @@ export default function MembersPage() {
               <Upload className="h-4 w-4" /> Import CSV
             </button>
             <button
-              onClick={() => setDialogOpen(true)}
+              onClick={openCreateDialog}
               className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
             >
               <Plus className="h-4 w-4" /> Add Member
@@ -66,18 +212,41 @@ export default function MembersPage() {
               className="h-10 w-full rounded-lg border border-input bg-card pl-10 pr-4 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20"
             />
           </div>
-          <select className="h-10 rounded-lg border border-input bg-card px-3 text-sm text-foreground">
-            <option>All Departments</option>
-            <option>Choir</option>
-            <option>Media Team</option>
-            <option>Youth Ministry</option>
+          <select
+            className="h-10 rounded-lg border border-input bg-card px-3 text-sm text-foreground"
+            value={department}
+            onChange={(e) => {
+              setDepartment(e.target.value);
+              setPage(1);
+            }}
+          >
+            <option value="ALL">All Departments</option>
+            {departmentOptions.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
           </select>
-          <select className="h-10 rounded-lg border border-input bg-card px-3 text-sm text-foreground">
-            <option>All Status</option>
-            <option>Active</option>
-            <option>Inactive</option>
+          <select
+            className="h-10 rounded-lg border border-input bg-card px-3 text-sm text-foreground"
+            value={status}
+            onChange={(e) => {
+              setStatus(e.target.value);
+              setPage(1);
+            }}
+          >
+            <option value="ALL">All Status</option>
+            <option value="ACTIVE">Active</option>
+            <option value="INACTIVE">Inactive</option>
+            <option value="VISITOR">Visitor</option>
           </select>
         </div>
+
+        {error ? (
+          <div className="mb-4 rounded-lg border border-red-400 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+            {error}
+          </div>
+        ) : null}
 
         {/* Table */}
         <div className="rounded-xl bg-card card-shadow overflow-hidden">
@@ -95,58 +264,103 @@ export default function MembersPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((m) => (
+                {isLoading ? (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                      Loading members...
+                    </td>
+                  </tr>
+                ) : null}
+
+                {!isLoading && members.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                      No members found.
+                    </td>
+                  </tr>
+                ) : null}
+
+                {members.map((m) => {
+                  const memberStatus = m.memberStatus ?? "ACTIVE";
+                  const memberDepartments = m.departments?.join(", ") || "-";
+                  const initials = m.fullName
+                    .split(" ")
+                    .map((n) => n[0])
+                    .join("")
+                    .slice(0, 2)
+                    .toUpperCase();
+
+                  return (
                   <tr key={m.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
                     <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{m.id}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-semibold text-primary">
-                          {m.name.split(" ").map((n) => n[0]).join("")}
+                          {initials}
                         </div>
-                        <span className="font-medium text-foreground">{m.name}</span>
+                        <span className="font-medium text-foreground">{m.fullName}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground">{m.phone}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{m.department}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{m.phone ?? "-"}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{memberDepartments}</td>
                     <td className="px-4 py-3">
-                      <span className={cn("inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium", typeColors[m.type])}>
-                        {m.type}
+                      <span className={cn("inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium", typeColors[m.type] ?? "bg-muted text-muted-foreground")}>
+                        {toMemberTypeLabel(m.type)}
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={cn("inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium", statusColors[m.status])}>
-                        {m.status}
+                      <span className={cn("inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium", statusColors[memberStatus] ?? "bg-muted text-muted-foreground")}>
+                        {toStatusLabel(memberStatus)}
                       </span>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
-                        <button className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
+                        <button
+                          onClick={() => setViewingMember(m)}
+                          className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                        >
                           <Eye className="h-4 w-4" />
                         </button>
-                        <button className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
+                        <button
+                          onClick={() => openEditDialog(m)}
+                          disabled={activeActionId === m.id}
+                          className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50"
+                        >
                           <Pencil className="h-4 w-4" />
                         </button>
-                        <button className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors">
+                        <button
+                          onClick={() => handleDeleteMember(m)}
+                          disabled={activeActionId === m.id}
+                          className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-50"
+                        >
                           <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
 
           {/* Pagination */}
           <div className="flex items-center justify-between border-t border-border px-4 py-3">
-            <p className="text-xs text-muted-foreground">Showing {filtered.length} of {mockMembers.length} members</p>
+            <p className="text-xs text-muted-foreground">Showing {members.length} of {totalItems} members</p>
             <div className="flex items-center gap-1">
-              <button className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted transition-colors">
+              <button
+                className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted transition-colors disabled:opacity-50"
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+                disabled={page <= 1 || isLoading}
+              >
                 <ChevronLeft className="h-4 w-4" />
               </button>
-              <button className="rounded-lg px-3 py-1 text-sm font-medium bg-primary text-primary-foreground">1</button>
-              <button className="rounded-lg px-3 py-1 text-sm text-muted-foreground hover:bg-muted transition-colors">2</button>
-              <button className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted transition-colors">
+              <button className="rounded-lg px-3 py-1 text-sm font-medium bg-primary text-primary-foreground">{page}</button>
+              <button
+                className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted transition-colors disabled:opacity-50"
+                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                disabled={page >= totalPages || isLoading}
+              >
                 <ChevronRight className="h-4 w-4" />
               </button>
             </div>
@@ -154,7 +368,43 @@ export default function MembersPage() {
         </div>
       </div>
 
-      <AddMemberDialog open={dialogOpen} onOpenChange={setDialogOpen} />
+      <AddMemberDialog
+        open={dialogOpen}
+        onOpenChange={handleDialogOpenChange}
+        onSave={handleSaveMember}
+        mode={editingMember ? "edit" : "create"}
+        initialData={editingMember ?? undefined}
+      />
+
+      {viewingMember ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-10">
+          <button
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setViewingMember(null)}
+            aria-label="Close member details"
+          />
+          <div className="relative z-10 w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-foreground">Member Details</h2>
+              <button
+                onClick={() => setViewingMember(null)}
+                className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {detailRows.map(([label, value]) => (
+                <div key={label} className="rounded-lg border border-border bg-background/40 p-3">
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+                  <p className="mt-1 text-sm text-foreground break-words">{value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </DashboardLayout>
   );
 }

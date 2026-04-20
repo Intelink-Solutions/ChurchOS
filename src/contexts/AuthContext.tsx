@@ -17,6 +17,8 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 const USER_STORAGE_KEY = "churchos-user";
+const ACCESS_TOKEN_STORAGE_KEY = "churchos-access-token";
+const REFRESH_TOKEN_STORAGE_KEY = "churchos-refresh-token";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(() => {
@@ -43,6 +45,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = () => {
     setUser(null);
     localStorage.removeItem(USER_STORAGE_KEY);
+    localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+    localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
     navigate("/website");
   };
 

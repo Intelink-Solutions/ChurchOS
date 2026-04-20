@@ -8,15 +8,20 @@ type RequestOptions = {
 };
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api/v1";
+const ACCESS_TOKEN_STORAGE_KEY = "churchos-access-token";
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = "GET", body, token, headers } = options;
+  const storedToken = typeof window !== "undefined"
+    ? localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY) ?? undefined
+    : undefined;
+  const resolvedToken = token ?? storedToken;
 
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method,
     headers: {
       "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(resolvedToken ? { Authorization: `Bearer ${resolvedToken}` } : {}),
       ...headers,
     },
     body: body ? JSON.stringify(body) : undefined,

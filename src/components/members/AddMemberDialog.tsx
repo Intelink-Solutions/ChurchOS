@@ -2,13 +2,19 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
 import type { MemberRecord } from "@/types/userManagement";
 
+type MemberSavePayload = Partial<MemberRecord> & {
+  userId?: string | null;
+  unlinkUser?: boolean;
+};
+
 interface AddMemberDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave: (payload: Partial<MemberRecord>) => Promise<void>;
+  onSave: (payload: MemberSavePayload) => Promise<void>;
   mode?: "create" | "edit";
   initialData?: Partial<MemberRecord>;
   initialType?: "New Member" | "Visitor" | "Member From Other Branch";
+  userOptions?: Array<{ id: string; label: string }>;
 }
 
 const tabs = ["Personal", "Church Info", "Family", "Spiritual", "Notes"];
@@ -26,7 +32,7 @@ function toBoolean(value: string) {
   return undefined;
 }
 
-function mapMemberPayload(memberType: string, formData: FormData): Partial<MemberRecord> {
+function mapMemberPayload(memberType: string, formData: FormData): MemberSavePayload {
   const type: MemberRecord["type"] =
     memberType === "Visitor"
       ? "VISITOR"
@@ -46,8 +52,10 @@ function mapMemberPayload(memberType: string, formData: FormData): Partial<Membe
   const baptismStatusInput = getText(formData, "baptismStatus");
   const workerStatusInput = getText(formData, "workerStatus");
   const maritalStatusInput = getText(formData, "maritalStatus");
+  const selectedUserId = getText(formData, "userId");
+  const unlinkUser = formData.get("unlinkUser") === "on";
 
-  return {
+  const payload: MemberSavePayload = {
     type,
     fullName: getText(formData, "fullName"),
     phone: getText(formData, "phone") || undefined,
@@ -91,6 +99,14 @@ function mapMemberPayload(memberType: string, formData: FormData): Partial<Membe
     additionalNotes: getText(formData, "additionalNotes") || undefined,
     prayerRequests: getText(formData, "prayerRequests") || undefined,
   };
+
+  if (unlinkUser) {
+    payload.unlinkUser = true;
+  } else if (selectedUserId) {
+    payload.userId = selectedUserId;
+  }
+
+  return payload;
 }
 
 function memberTypeFromRecord(type?: MemberRecord["type"]): "New Member" | "Visitor" | "Member From Other Branch" {
@@ -117,6 +133,7 @@ export function AddMemberDialog({
   mode = "create",
   initialData,
   initialType = "New Member",
+  userOptions = [],
 }: AddMemberDialogProps) {
   const [activeTab, setActiveTab] = useState(0);
   const [memberType, setMemberType] = useState(memberTypeFromRecord(initialData?.type) ?? initialType);
@@ -164,6 +181,7 @@ export function AddMemberDialog({
       transferReason: initialData?.transferReason ?? "",
       additionalNotes: initialData?.additionalNotes ?? "",
       prayerRequests: initialData?.prayerRequests ?? "",
+      userId: initialData?.userId ?? "",
     };
   }, [initialData]);
 
@@ -234,6 +252,23 @@ export function AddMemberDialog({
             <option>Visitor</option>
             <option>Member From Other Branch</option>
           </select>
+        </div>
+
+        <div className="mb-5 space-y-2">
+          <FormField
+            name="userId"
+            label="Linked User (Optional)"
+            type="select"
+            options={userOptions.map((item) => `${item.id}::${item.label}`)}
+            defaultValue={initialValues.userId}
+            useOptionValue
+          />
+          {mode === "edit" && initialData?.userId ? (
+            <label className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+              <input type="checkbox" name="unlinkUser" className="h-4 w-4" />
+              Unlink current user from this member
+            </label>
+          ) : null}
         </div>
 
         {/* Tabs */}
@@ -389,6 +424,7 @@ function FormField({
   className = "",
   required = false,
   defaultValue,
+  useOptionValue = false,
 }: {
   name: string;
   label: string;
@@ -398,6 +434,7 @@ function FormField({
   className?: string;
   required?: boolean;
   defaultValue?: string;
+  useOptionValue?: boolean;
 }) {
   return (
     <div className={className}>
@@ -410,7 +447,18 @@ function FormField({
           className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring/20"
         >
           <option value="">Select {label}</option>
-          {options?.map((o) => <option key={o}>{o}</option>)}
+          {options?.map((o) => {
+            if (!useOptionValue) {
+              return <option key={o}>{o}</option>;
+            }
+
+            const [value, optionLabel] = o.split("::");
+            return (
+              <option key={o} value={value}>
+                {optionLabel ?? value}
+              </option>
+            );
+          })}
         </select>
       ) : (
         <input

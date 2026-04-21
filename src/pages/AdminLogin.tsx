@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Shield, ArrowLeft } from "lucide-react";
 import { loginUser } from "@/lib/api/authApi";
+import { getApiErrorMessage } from "@/lib/api/errorHandling";
 
 export default function AdminLoginPage() {
   const { login } = useAuth();
@@ -35,9 +36,15 @@ export default function AdminLoginPage() {
 
       localStorage.setItem("churchos-access-token", response.accessToken);
       localStorage.setItem("churchos-refresh-token", response.refreshToken);
-      login(displayName, "admin");
+      login({
+        name: displayName,
+        role: "admin",
+        roleCode: response.user.roleCode,
+        permissions: response.permissions,
+        permissionScopes: response.permissionScopes,
+      });
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Admin login failed. Please try again.";
+      const message = getApiErrorMessage(err, "Admin login failed. Please try again.");
       setError(message);
     } finally {
       setIsLoading(false);

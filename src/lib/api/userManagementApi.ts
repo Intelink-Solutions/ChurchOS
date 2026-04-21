@@ -1,5 +1,14 @@
 import { apiRequest } from "@/lib/api/httpClient";
-import type { Branch, MemberRecord, PagedResult, RoleDefinition, UserProfile, UserStatus } from "@/types/userManagement";
+import type {
+  AuditLogRecord,
+  Branch,
+  ChurchRecord,
+  MemberRecord,
+  PagedResult,
+  RoleDefinition,
+  UserProfile,
+  UserStatus,
+} from "@/types/userManagement";
 
 export type UserListQuery = {
   page?: number;
@@ -17,6 +26,14 @@ export type MemberListQuery = {
   status?: string;
   memberType?: string;
   department?: string;
+};
+
+export type AuditLogQuery = {
+  page?: number;
+  size?: number;
+  actorUserId?: string;
+  action?: string;
+  resourceType?: string;
 };
 
 function toQuery(params: Record<string, string | number | undefined>) {
@@ -119,6 +136,18 @@ export async function updateMember(id: string, payload: Partial<MemberRecord>) {
   });
 }
 
+export type PatchMemberPayload = Partial<MemberRecord> & {
+  userId?: string | null;
+  unlinkUser?: boolean;
+};
+
+export async function patchMember(id: string, payload: PatchMemberPayload) {
+  return apiRequest<MemberRecord>(`/members/${id}`, {
+    method: "PATCH",
+    body: payload,
+  });
+}
+
 export async function deleteMember(id: string) {
   return apiRequest<{ message: string }>(`/members/${id}`, {
     method: "DELETE",
@@ -147,4 +176,54 @@ export async function deleteBranch(id: string) {
   return apiRequest<{ message: string }>(`/branches/${id}`, {
     method: "DELETE",
   });
+}
+
+export async function getChurches() {
+  return apiRequest<ChurchRecord[]>("/churches");
+}
+
+export async function getChurchById(id: string) {
+  return apiRequest<ChurchRecord>(`/churches/${id}`);
+}
+
+export async function createChurch(payload: Pick<ChurchRecord, "name" | "location"> & Partial<Pick<ChurchRecord, "description">>) {
+  return apiRequest<ChurchRecord>("/churches", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function updateChurch(id: string, payload: Partial<ChurchRecord>) {
+  return apiRequest<ChurchRecord>(`/churches/${id}`, {
+    method: "PUT",
+    body: payload,
+  });
+}
+
+export async function deleteChurch(id: string) {
+  return apiRequest<{ message: string }>(`/churches/${id}`, {
+    method: "DELETE",
+  });
+}
+
+export async function approveChurch(id: string) {
+  return apiRequest<ChurchRecord>(`/churches/${id}/approve`, {
+    method: "POST",
+  });
+}
+
+export async function deactivateChurch(id: string) {
+  return apiRequest<ChurchRecord>(`/churches/${id}/deactivate`, {
+    method: "POST",
+  });
+}
+
+export async function assignChurchAdmin(id: string, userId: string) {
+  return apiRequest<ChurchRecord>(`/churches/${id}/assign-admin/${userId}`, {
+    method: "POST",
+  });
+}
+
+export async function getAdminAuditLogs(query: AuditLogQuery = {}) {
+  return apiRequest<PagedResult<AuditLogRecord>>(`/admin/audit-logs${toQuery(query)}`);
 }

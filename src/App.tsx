@@ -15,6 +15,8 @@ import SermonsPage from "./pages/Sermons";
 import PrayerRequestsPage from "./pages/PrayerRequests";
 import CommunicationsPage from "./pages/Communications";
 import SettingsPage from "./pages/Settings";
+import ChurchesPage from "./pages/Churches";
+import AdminAuditLogsPage from "./pages/AdminAuditLogs";
 import DepartmentsPage from "./pages/Departments";
 import CellGroupsPage from "./pages/CellGroups";
 import ReportsPage from "./pages/Reports";
@@ -59,20 +61,22 @@ const App = () => (
             <AuthProvider>
             <Routes>
               <Route path="/" element={<DashboardRouter />} />
-              <Route path="/members" element={<ProtectedRoute requireAdmin><MembersPage /></ProtectedRoute>} />
+              <Route path="/members" element={<ProtectedRoute requireAdmin requiredPermission="members:read"><MembersPage /></ProtectedRoute>} />
               <Route path="/visitors" element={<ProtectedRoute requireAdmin><VisitorsPage /></ProtectedRoute>} />
               <Route path="/departments" element={<ProtectedRoute requireAdmin><DepartmentsPage /></ProtectedRoute>} />
               <Route path="/cell-groups" element={<ProtectedRoute requireAdmin><CellGroupsPage /></ProtectedRoute>} />
-              <Route path="/attendance" element={<ProtectedRoute requireAdmin><AttendancePage /></ProtectedRoute>} />
-              <Route path="/events" element={<ProtectedRoute requireAdmin><EventsPage /></ProtectedRoute>} />
-              <Route path="/finance" element={<ProtectedRoute requireAdmin><FinancePage /></ProtectedRoute>} />
-              <Route path="/tithes" element={<ProtectedRoute requireAdmin><FinancePage /></ProtectedRoute>} />
+              <Route path="/attendance" element={<ProtectedRoute requireAdmin requiredPermission="attendance:read"><AttendancePage /></ProtectedRoute>} />
+              <Route path="/events" element={<ProtectedRoute requireAdmin requiredPermission="events:read"><EventsPage /></ProtectedRoute>} />
+              <Route path="/finance" element={<ProtectedRoute requireAdmin requiredPermission="finance:read"><FinancePage /></ProtectedRoute>} />
+              <Route path="/tithes" element={<ProtectedRoute requireAdmin requiredPermission="finance:read"><FinancePage /></ProtectedRoute>} />
               <Route path="/sermons" element={<ProtectedRoute requireAdmin><SermonsPage /></ProtectedRoute>} />
-              <Route path="/prayer-requests" element={<ProtectedRoute requireAdmin><PrayerRequestsPage /></ProtectedRoute>} />
-              <Route path="/communications" element={<ProtectedRoute requireAdmin><CommunicationsPage /></ProtectedRoute>} />
-              <Route path="/reports" element={<ProtectedRoute requireAdmin><ReportsPage /></ProtectedRoute>} />
+              <Route path="/prayer-requests" element={<ProtectedRoute requireAdmin requiredPermission="members:read"><PrayerRequestsPage /></ProtectedRoute>} />
+              <Route path="/communications" element={<ProtectedRoute requireAdmin requiredPermission="communications:send"><CommunicationsPage /></ProtectedRoute>} />
+              <Route path="/reports" element={<ProtectedRoute requireAdmin requiredPermission="reports:read"><ReportsPage /></ProtectedRoute>} />
               <Route path="/analytics" element={<ProtectedRoute requireAdmin><AnalyticsPage /></ProtectedRoute>} />
-              <Route path="/settings" element={<ProtectedRoute requireAdmin><SettingsPage /></ProtectedRoute>} />
+              <Route path="/settings" element={<ProtectedRoute requireAdmin requiredPermission="settings:read"><SettingsPage /></ProtectedRoute>} />
+              <Route path="/churches" element={<ProtectedRoute requireAdmin requiredPermission="churches:read"><ChurchesPage /></ProtectedRoute>} />
+              <Route path="/admin/audit-logs" element={<ProtectedRoute requireAdmin requiredPermission="auditlogs:read"><AdminAuditLogsPage /></ProtectedRoute>} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/admin/login" element={<AdminLoginPage />} />
               <Route path="/register" element={<RegisterPage />} />

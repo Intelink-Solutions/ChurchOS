@@ -31,7 +31,17 @@ export type Permission =
   | "events:read"
   | "events:write"
   | "communications:send"
-  | "reports:read";
+  | "reports:read"
+  | "churches:read"
+  | "churches:create"
+  | "churches:update"
+  | "churches:delete"
+  | "churches:approve"
+  | "auditlogs:read";
+
+export type PermissionScope = "GLOBAL" | "BRANCH" | "SELF";
+
+export type PermissionScopeMap = Partial<Record<Permission, PermissionScope[]>>;
 
 export type RoleDefinition = {
   id: string;
@@ -59,6 +69,7 @@ export type UserProfile = {
   lastLoginAt?: string;
   createdAt: string;
   updatedAt: string;
+  memberId?: string | null;
 };
 
 export type Branch = {
@@ -76,6 +87,7 @@ export type MemberRecord = {
   id: string;
   type: MemberType;
   fullName: string;
+  userId?: string | null;
   gender?: "MALE" | "FEMALE";
   dateOfBirth?: string;
   phone?: string;
@@ -107,6 +119,29 @@ export type MemberRecord = {
   prayerRequests?: string;
   createdAt: string;
   updatedAt: string;
+};
+
+export type ChurchStatus = "PENDING_APPROVAL" | "ACTIVE" | "DEACTIVATED";
+
+export type ChurchRecord = {
+  id: string;
+  name: string;
+  location: string;
+  description?: string;
+  status: ChurchStatus;
+  adminUserId?: string | null;
+  memberCount?: number;
+};
+
+export type AuditLogRecord = {
+  id: string;
+  actorUserId: string;
+  action: string;
+  resourceType: string;
+  resourceId?: string;
+  details?: string;
+  ipAddress?: string;
+  createdAt: string;
 };
 
 export type PagedResult<T> = {
@@ -149,4 +184,15 @@ export type AuthResponse = {
   tokenType: "Bearer";
   expiresInSeconds: number;
   user: UserProfile;
+  permissions?: Permission[];
+  permissionScopes?: PermissionScopeMap;
+};
+
+export type ApiErrorResponse = {
+  timestamp?: string;
+  status: number;
+  error: string;
+  message: string;
+  path?: string;
+  validationErrors?: Record<string, string | string[]>;
 };

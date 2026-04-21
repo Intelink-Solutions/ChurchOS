@@ -1,17 +1,32 @@
 import { createContext, useContext, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { hasAnyPermission as checkAnyPermission, hasPermission as checkPermission } from "@/lib/authz";
+import type { Permission, PermissionScopeMap, SystemRole } from "@/types/userManagement";
 
 type Role = "admin" | "user";
 
 export type AuthUser = {
   name: string;
   role: Role;
+  roleCode: SystemRole;
+  permissions: Permission[];
+  permissionScopes: PermissionScopeMap;
+};
+
+export type LoginSession = {
+  name: string;
+  role: Role;
+  roleCode: SystemRole;
+  permissions?: Permission[];
+  permissionScopes?: PermissionScopeMap;
 };
 
 type AuthContextValue = {
   user: AuthUser | null;
-  login: (name: string, role: Role) => void;
+  login: (session: LoginSession) => void;
   logout: () => void;
+  hasPermission: (permission: Permission) => boolean;
+  hasAnyPermission: (permissions: Permission[]) => boolean;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -26,7 +41,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const stored = localStorage.getItem(USER_STORAGE_KEY);
     if (!stored) return null;
     try {
-      return JSON.parse(stored) as AuthUser;
+      const parsed = JSON.parse(stored) as Partial<AuthUser>;
+      if (!parsed.name || !parsed.role) {
+        return null;
+      }
+
+      return {
+        name: parsed.name,
+        role: parsed.role,
+        roleCode: parsed.roleCode ?? (parsed.role === "admin" ? "ADMIN" : "MEMBER"),
+        permissions: Array.isArray(parsed.permissions) ? parsed.permissions : [],
+        permissionScopes: parsed.permissionScopes ?? {},
+      };
     } catch {
       return null;
     }
@@ -34,11 +60,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const navigate = useNavigate();
 
-  const login = (name: string, role: Role) => {
-    const authUser: AuthUser = { name, role };
+  const login = (session: LoginSession) => {
+    const authUser: AuthUser = {
+      name: session.name,
+      role: session.role,
+      roleCode: session.roleCode,
+      permissions: session.permissions ?? [],
+      permissionScopes: session.permissionScopes ?? {},
+    };
     setUser(authUser);
     localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(authUser));
-    // Navigate to appropriate dashboard based on role
     navigate("/");
   };
 
@@ -50,7 +81,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     navigate("/website");
   };
 
-  const value = useMemo(() => ({ user, login, logout }), [user]);
+  const value = useMemo(
+    () => ({
+      user,
+      login,
+      logout,
+      hasPermission: (permission: Permission) => checkPermission(user, permission),
+      hasAnyPermission: (permissions: Permission[]) => checkAnyPermission(user, permissions),
+    }),
+    [user],
+  );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

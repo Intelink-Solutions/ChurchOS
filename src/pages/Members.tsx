@@ -3,9 +3,15 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { Plus, Upload, Search, Eye, Pencil, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AddMemberDialog } from "@/components/members/AddMemberDialog";
-import { createMember, deleteMember, getMembers, updateMember } from "@/lib/api/userManagementApi";
+import { createMember, deleteMember, getMembers, getUsers, patchMember } from "@/lib/api/userManagementApi";
 import type { MemberRecord } from "@/types/userManagement";
 import { toast } from "sonner";
+import { getApiErrorMessage } from "@/lib/api/errorHandling";
+
+type MemberSavePayload = Partial<MemberRecord> & {
+  userId?: string | null;
+  unlinkUser?: boolean;
+};
 
 const statusColors: Record<string, string> = {
   ACTIVE: "bg-success/10 text-success",
@@ -43,6 +49,7 @@ export default function MembersPage() {
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
   const [editingMember, setEditingMember] = useState<MemberRecord | null>(null);
   const [viewingMember, setViewingMember] = useState<MemberRecord | null>(null);
+  const [memberUserOptions, setMemberUserOptions] = useState<Array<{ id: string; label: string }>>([]);
 
   useEffect(() => {
     const fetchMembers = async () => {
@@ -61,7 +68,7 @@ export default function MembersPage() {
         setTotalItems(response.totalItems);
         setTotalPages(Math.max(1, response.totalPages));
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Unable to load members.";
+        const message = getApiErrorMessage(err, "Unable to load members.");
         setError(message);
         toast.error(message);
       } finally {
@@ -72,9 +79,28 @@ export default function MembersPage() {
     fetchMembers();
   }, [search, status, department, page, reloadKey]);
 
-  const handleSaveMember = async (payload: Partial<MemberRecord>) => {
+  useEffect(() => {
+    const fetchUserOptions = async () => {
+      try {
+        const response = await getUsers({ page: 1, size: 200 });
+        setMemberUserOptions(
+          response.items.map((item) => ({
+            id: item.id,
+            label: `${item.fullName} (${item.email})`,
+          })),
+        );
+      } catch {
+        // Non-blocking for member forms: dialog still works without optional linking.
+        setMemberUserOptions([]);
+      }
+    };
+
+    fetchUserOptions();
+  }, []);
+
+  const handleSaveMember = async (payload: MemberSavePayload) => {
     if (editingMember) {
-      await updateMember(editingMember.id, payload);
+      await patchMember(editingMember.id, payload);
       toast.success("Member updated successfully.");
     } else {
       await createMember(payload);
@@ -114,7 +140,7 @@ export default function MembersPage() {
       toast.success("Member deleted successfully.");
       setReloadKey((current) => current + 1);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Could not delete member.";
+      const message = getApiErrorMessage(err, "Could not delete member.");
       toast.error(message);
     } finally {
       setActiveActionId(null);
@@ -374,6 +400,7 @@ export default function MembersPage() {
         onSave={handleSaveMember}
         mode={editingMember ? "edit" : "create"}
         initialData={editingMember ?? undefined}
+        userOptions={memberUserOptions}
       />
 
       {viewingMember ? (

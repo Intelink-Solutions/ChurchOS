@@ -3,27 +3,30 @@ import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Users, UserPlus, Building2, Network, ClipboardCheck,
   Calendar, DollarSign, Heart, BookOpen, MessageSquare, BarChart3,
-  TrendingUp, Settings, ChevronLeft, ChevronRight, Church, Globe, User
+  TrendingUp, Settings, ChevronLeft, ChevronRight, Church, Globe, User, ClipboardList
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
+import type { Permission } from "@/types/userManagement";
 
 const adminMenuItems = [
   { title: "Dashboard", icon: LayoutDashboard, path: "/" },
-  { title: "Members", icon: Users, path: "/members" },
-  { title: "Visitors", icon: UserPlus, path: "/visitors" },
+  { title: "Members", icon: Users, path: "/members", permission: "members:read" as Permission },
+  { title: "Visitors", icon: UserPlus, path: "/visitors", permission: "members:read" as Permission },
   { title: "Departments", icon: Building2, path: "/departments" },
   { title: "Cell Groups", icon: Network, path: "/cell-groups" },
-  { title: "Attendance", icon: ClipboardCheck, path: "/attendance" },
-  { title: "Events", icon: Calendar, path: "/events" },
-  { title: "Finance", icon: DollarSign, path: "/finance" },
-  { title: "Tithes & Offerings", icon: Heart, path: "/tithes" },
+  { title: "Attendance", icon: ClipboardCheck, path: "/attendance", permission: "attendance:read" as Permission },
+  { title: "Events", icon: Calendar, path: "/events", permission: "events:read" as Permission },
+  { title: "Finance", icon: DollarSign, path: "/finance", permission: "finance:read" as Permission },
+  { title: "Tithes & Offerings", icon: Heart, path: "/tithes", permission: "finance:read" as Permission },
   { title: "Sermons", icon: BookOpen, path: "/sermons" },
-  { title: "Prayer Requests", icon: MessageSquare, path: "/prayer-requests" },
-  { title: "Communications", icon: MessageSquare, path: "/communications" },
-  { title: "Reports", icon: BarChart3, path: "/reports" },
+  { title: "Prayer Requests", icon: MessageSquare, path: "/prayer-requests", permission: "members:read" as Permission },
+  { title: "Communications", icon: MessageSquare, path: "/communications", permission: "communications:send" as Permission },
+  { title: "Reports", icon: BarChart3, path: "/reports", permission: "reports:read" as Permission },
   { title: "Analytics", icon: TrendingUp, path: "/analytics" },
-  { title: "Settings", icon: Settings, path: "/settings" },
+  { title: "Churches", icon: Church, path: "/churches", permission: "churches:read" as Permission },
+  { title: "Audit Logs", icon: ClipboardList, path: "/admin/audit-logs", permission: "auditlogs:read" as Permission },
+  { title: "Settings", icon: Settings, path: "/settings", permission: "settings:read" as Permission },
   { title: "Public Website", icon: Globe, path: "/website" },
 ];
 
@@ -39,10 +42,12 @@ const memberMenuItems = [
 export function AppSidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
 
   // Default to member menu if user is not loaded yet
-  const menuItems = user?.role === "admin" ? adminMenuItems : memberMenuItems;
+  const menuItems = user?.role === "admin"
+    ? adminMenuItems.filter((item) => !item.permission || hasPermission(item.permission))
+    : memberMenuItems;
 
   return (
     <aside

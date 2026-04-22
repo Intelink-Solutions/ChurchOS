@@ -49,8 +49,51 @@ function toQuery(params: Record<string, string | number | undefined>) {
   return queryString ? `?${queryString}` : "";
 }
 
+const ACCESS_TOKEN_STORAGE_KEY = "churchos-access-token";
+
+function parseJwtPayload(token: string): Record<string, unknown> | null {
+  try {
+    const [, payloadPart] = token.split(".");
+    if (!payloadPart) return null;
+
+    const normalized = payloadPart.replace(/-/g, "+").replace(/_/g, "/");
+    const decoded = atob(normalized);
+    return JSON.parse(decoded) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+export function resolveCurrentUserIdFromToken(): string | null {
+  if (typeof window === "undefined") return null;
+
+  const token = localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY);
+  if (!token) return null;
+
+  const payload = parseJwtPayload(token);
+  if (!payload) return null;
+
+  const candidates = [payload.userId, payload.uid, payload.id, payload.sub];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === "number") return String(candidate);
+    if (typeof candidate === "string" && /^\d+$/.test(candidate)) return candidate;
+  }
+
+  return null;
+}
+
 export async function getUsers(query: UserListQuery = {}) {
   return apiRequest<PagedResult<UserProfile>>(`/users${toQuery(query)}`);
+}
+
+export async function getCurrentUserProfile() {
+  const userId = resolveCurrentUserIdFromToken();
+  if (userId) {
+    return getUserById(userId);
+  }
+
+  return apiRequest<UserProfile>("/users/me");
 }
 
 export async function searchUsersForDropdown(search?: string) {

@@ -1,10 +1,13 @@
 import { Bell, MessageSquare, Search, ChevronDown, LogOut, User, Settings, Moon, Sun } from "lucide-react";
 import { useState } from "react";
 import { useDarkMode } from "@/contexts/DarkModeContext";
+import { Link } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 
 export function TopNavbar() {
   const [profileOpen, setProfileOpen] = useState(false);
   const { isDarkMode, toggleDarkMode } = useDarkMode();
+  const { logout } = useAuth();
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-card px-6 card-shadow">
@@ -50,14 +53,28 @@ export function TopNavbar() {
             <>
               <div className="fixed inset-0 z-40" onClick={() => setProfileOpen(false)} />
               <div className="absolute right-0 top-12 z-50 w-48 rounded-xl border border-border bg-card p-1.5 card-shadow-hover animate-fade-in">
-                <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors">
+                <Link
+                  to="/profile"
+                  onClick={() => setProfileOpen(false)}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors"
+                >
                   <User className="h-4 w-4" /> Profile
-                </button>
-                <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors">
+                </Link>
+                <Link
+                  to="/settings"
+                  onClick={() => setProfileOpen(false)}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors"
+                >
                   <Settings className="h-4 w-4" /> Settings
-                </button>
+                </Link>
                 <hr className="my-1 border-border" />
-                <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-destructive hover:bg-destructive/10 transition-colors">
+                <button
+                  onClick={() => {
+                    setProfileOpen(false);
+                    logout();
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-destructive hover:bg-destructive/10 transition-colors"
+                >
                   <LogOut className="h-4 w-4" /> Logout
                 </button>
               </div>

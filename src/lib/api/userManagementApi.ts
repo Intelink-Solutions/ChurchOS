@@ -53,6 +53,11 @@ export async function getUsers(query: UserListQuery = {}) {
   return apiRequest<PagedResult<UserProfile>>(`/users${toQuery(query)}`);
 }
 
+export async function searchUsersForDropdown(search?: string) {
+  const params = search ? `?search=${encodeURIComponent(search)}` : "";
+  return apiRequest<PagedResult<UserProfile>>(`/users/search${params}`);
+}
+
 export async function getUserById(id: string) {
   return apiRequest<UserProfile>(`/users/${id}`);
 }

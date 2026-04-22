@@ -3,7 +3,7 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { Plus, Upload, Search, Eye, Pencil, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AddMemberDialog } from "@/components/members/AddMemberDialog";
-import { createMember, deleteMember, getMembers, getUsers, patchMember } from "@/lib/api/userManagementApi";
+import { createMember, deleteMember, getMembers, searchUsersForDropdown, patchMember } from "@/lib/api/userManagementApi";
 import type { MemberRecord } from "@/types/userManagement";
 import { toast } from "sonner";
 import { getApiErrorMessage } from "@/lib/api/errorHandling";
@@ -11,6 +11,14 @@ import { getApiErrorMessage } from "@/lib/api/errorHandling";
 type MemberSavePayload = Partial<MemberRecord> & {
   userId?: string | null;
   unlinkUser?: boolean;
+};
+
+type MemberUserOption = {
+  id: string;
+  label: string;
+  fullName: string;
+  email: string;
+  phone?: string;
 };
 
 const statusColors: Record<string, string> = {
@@ -49,7 +57,7 @@ export default function MembersPage() {
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
   const [editingMember, setEditingMember] = useState<MemberRecord | null>(null);
   const [viewingMember, setViewingMember] = useState<MemberRecord | null>(null);
-  const [memberUserOptions, setMemberUserOptions] = useState<Array<{ id: string; label: string }>>([]);
+  const [memberUserOptions, setMemberUserOptions] = useState<MemberUserOption[]>([]);
 
   useEffect(() => {
     const fetchMembers = async () => {
@@ -79,22 +87,25 @@ export default function MembersPage() {
     fetchMembers();
   }, [search, status, department, page, reloadKey]);
 
-  useEffect(() => {
-    const fetchUserOptions = async () => {
-      try {
-        const response = await getUsers({ page: 1, size: 200 });
-        setMemberUserOptions(
-          response.items.map((item) => ({
-            id: item.id,
-            label: `${item.fullName} (${item.email})`,
-          })),
-        );
-      } catch {
-        // Non-blocking for member forms: dialog still works without optional linking.
-        setMemberUserOptions([]);
-      }
-    };
+  const fetchUserOptions = async () => {
+    try {
+      const response = await searchUsersForDropdown();
+      setMemberUserOptions(
+        response.items.map((item) => ({
+          id: item.id,
+          label: `${item.fullName} (${item.email})`,
+          fullName: item.fullName,
+          email: item.email,
+          phone: item.phoneNumber,
+        })),
+      );
+    } catch {
+      // Non-blocking for member forms: dialog still works without optional linking.
+      setMemberUserOptions([]);
+    }
+  };
 
+  useEffect(() => {
     fetchUserOptions();
   }, []);
 
@@ -127,6 +138,8 @@ export default function MembersPage() {
     setDialogOpen(open);
     if (!open) {
       setEditingMember(null);
+    } else if (memberUserOptions.length === 0) {
+      fetchUserOptions();
     }
   };
 

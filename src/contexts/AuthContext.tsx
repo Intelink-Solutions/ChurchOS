@@ -49,7 +49,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return {
         name: parsed.name,
         role: parsed.role,
-        roleCode: parsed.roleCode ?? (parsed.role === "admin" ? "ADMIN" : "MEMBER"),
+        roleCode: parsed.roleCode ?? parsed.roleCode,
         permissions: Array.isArray(parsed.permissions) ? parsed.permissions : [],
         permissionScopes: parsed.permissionScopes ?? {},
       };

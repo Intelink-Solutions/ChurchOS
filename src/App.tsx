@@ -37,6 +37,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { Navigate } from "react-router-dom";
 import Index from "./pages/Index";
 import MemberDashboard from "./pages/MemberDashboard";
+import SuperAdminRouter from "./components/SuperAdminRouter";
 
 const queryClient = new QueryClient();
 
@@ -47,7 +48,24 @@ const DashboardRouter = () => {
     return <Navigate to="/login" replace />;
   }
 
-  return user.role === "admin" ? <Index /> : <MemberDashboard />;
+  // Route based on user role
+  if (user.roleCode === "SUPER_ADMIN") {
+    return <SuperAdminRouter />;
+  } else if (user.roleCode === "ADMIN") {
+    return <AdminRouter />;
+  } else {
+    return <MemberDashboard />;
+  }
+};
+
+const AdminRouter = () => {
+  const { user } = useAuth();
+
+  if (!user || user.roleCode !== "ADMIN") {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <Index />;
 };
 
 const App = () => (
@@ -60,8 +78,11 @@ const App = () => (
           <BrowserRouter>
             <AuthProvider>
             <Routes>
+              {/* Main Dashboard Route - Routes based on user role */}
               <Route path="/" element={<DashboardRouter />} />
-              <Route path="/members" element={<ProtectedRoute requireAdmin requiredPermission="members:read"><MembersPage /></ProtectedRoute>} />
+              
+              {/* Regular Admin Routes - Church specific features */}
+              <Route path="/members" element={<ProtectedRoute requireAdmin><MembersPage /></ProtectedRoute>} />
               <Route path="/visitors" element={<ProtectedRoute requireAdmin><VisitorsPage /></ProtectedRoute>} />
               <Route path="/departments" element={<ProtectedRoute requireAdmin><DepartmentsPage /></ProtectedRoute>} />
               <Route path="/cell-groups" element={<ProtectedRoute requireAdmin><CellGroupsPage /></ProtectedRoute>} />
@@ -72,31 +93,38 @@ const App = () => (
               <Route path="/sermons" element={<ProtectedRoute requireAdmin><SermonsPage /></ProtectedRoute>} />
               <Route path="/prayer-requests" element={<ProtectedRoute requireAdmin requiredPermission="members:read"><PrayerRequestsPage /></ProtectedRoute>} />
               <Route path="/communications" element={<ProtectedRoute requireAdmin requiredPermission="communications:send"><CommunicationsPage /></ProtectedRoute>} />
-              <Route path="/reports" element={<ProtectedRoute requireAdmin requiredPermission="reports:read"><ReportsPage /></ProtectedRoute>} />
-              <Route path="/analytics" element={<ProtectedRoute requireAdmin><AnalyticsPage /></ProtectedRoute>} />
-              <Route path="/settings" element={<ProtectedRoute requireAdmin requiredPermission="settings:read"><SettingsPage /></ProtectedRoute>} />
-              <Route path="/churches" element={<ProtectedRoute requireAdmin requiredPermission="churches:read"><ChurchesPage /></ProtectedRoute>} />
-              <Route path="/admin/audit-logs" element={<ProtectedRoute requireAdmin requiredPermission="auditlogs:read"><AdminAuditLogsPage /></ProtectedRoute>} />
+              
+              {/* Shared Routes - Available to both admin and super admin */}
+              <Route path="/reports" element={<ProtectedRoute requiredPermission="reports:read"><ReportsPage /></ProtectedRoute>} />
+              <Route path="/analytics" element={<ProtectedRoute><AnalyticsPage /></ProtectedRoute>} />
+              <Route path="/settings" element={<ProtectedRoute requiredPermission="settings:read"><SettingsPage /></ProtectedRoute>} />
+              <Route path="/churches" element={<ProtectedRoute requiredPermission="churches:read"><ChurchesPage /></ProtectedRoute>} />
+              <Route path="/admin/audit-logs" element={<ProtectedRoute requiredPermission="auditlogs:read"><AdminAuditLogsPage /></ProtectedRoute>} />
+              <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+              
+              {/* Authentication Routes */}
               <Route path="/login" element={<LoginPage />} />
               <Route path="/admin/login" element={<AdminLoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
               <Route path="/otp" element={<OtpVerificationPage />} />
               <Route path="/reset-password" element={<ResetPasswordOtpPage />} />
-              <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+              
               {/* Public Website */}
               <Route path="/website" element={<PublicHome />} />
               <Route path="/website/events" element={<PublicEvents />} />
               <Route path="/website/sermons" element={<PublicSermons />} />
               <Route path="/website/prayer-requests" element={<PublicPrayerRequests />} />
+              
+              {/* 404 */}
               <Route path="*" element={<NotFound />} />
             </Routes>
           </AuthProvider>
         </BrowserRouter>
       </TooltipProvider>
-      </DarkModeProvider>
-    </CurrencyProvider>
-  </QueryClientProvider>
+    </DarkModeProvider>
+  </CurrencyProvider>
+</QueryClientProvider>
 );
 
 export default App;

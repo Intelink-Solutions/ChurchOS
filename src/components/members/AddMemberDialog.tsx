@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ChangeEventHandler } from "react";
 import { X } from "lucide-react";
 import type { MemberRecord } from "@/types/userManagement";
+import { useDepartmentContext } from "@/components/departments/MockDepartmentDropdown";
 
 type MemberSavePayload = Partial<MemberRecord> & {
   userId?: string | null;
@@ -84,6 +85,13 @@ function buildPayload(memberType: string, fields: Fields): MemberSavePayload {
       ? "VISITOR"
       : "ACTIVE";
 
+  // Extract departments array for frontend type compatibility
+  const departmentsArray = fields.departments ? fields.departments.split(",").map(d => {
+    // Extract department name from formatted option (remove member count info)
+    const cleanName = d.trim().replace(/\s*\(\d+\s*members\)\s*$/, '');
+    return cleanName;
+  }).filter(d => d && !d.startsWith('---')) : undefined;
+
   const payload: MemberSavePayload = {
     type,
     fullName: fields.fullName.trim(),
@@ -102,7 +110,7 @@ function buildPayload(memberType: string, fields: Fields): MemberSavePayload {
     workerStatus: fields.workerStatus
       ? (fields.workerStatus.replace("-", "_").toUpperCase() as MemberRecord["workerStatus"])
       : undefined,
-    departments: fields.departments.trim() || undefined,
+    departments: departmentsArray,
     maritalStatus: fields.maritalStatus
       ? (fields.maritalStatus.toUpperCase() as MemberRecord["maritalStatus"])
       : undefined,
@@ -114,7 +122,7 @@ function buildPayload(memberType: string, fields: Fields): MemberSavePayload {
     baptismDate: fields.baptismDate || undefined,
     foundationClassCompleted: toBoolean(fields.foundationClassCompleted),
     leadershipTrainingCompleted: toBoolean(fields.leadershipTrainingCompleted),
-    invitedBy: fields.invitedBy.trim() || undefined,
+    invitedBy: fields.invitedBy || undefined,
     firstVisitDate: fields.firstVisitDate || undefined,
     howDidYouHearAboutUs: fields.howDidYouHearAboutUs || undefined,
     originalBranch: fields.originalBranch.trim() || undefined,
@@ -204,6 +212,39 @@ export function AddMemberDialog({
   const [error, setError] = useState("");
   const [submitMode, setSubmitMode] = useState<"close" | "another">("close");
   const [fields, setFields] = useState<Fields>(() => makeInitialFields(initialData));
+  
+  // Fetch departments for dropdown
+  const { departments } = useDepartmentContext();
+
+  // Group departments by category for better organization
+  const departmentsByCategory = useMemo(() => {
+    const grouped: Record<string, typeof departments> = {};
+    
+    departments.forEach(dept => {
+      if (!grouped[dept.category]) {
+        grouped[dept.category] = [];
+      }
+      grouped[dept.category].push(dept);
+    });
+    
+    return grouped;
+  }, [departments]);
+
+  // Create formatted options with category grouping
+  const departmentOptions = useMemo(() => {
+    const options: string[] = [];
+    
+    Object.entries(departmentsByCategory).forEach(([category, depts]) => {
+      // Add category header
+      options.push(`--- ${category.replace('_', ' ').toUpperCase()} ---`);
+      // Add departments in this category
+      depts.forEach(dept => {
+        options.push(dept.name);
+      });
+    });
+    
+    return options;
+  }, [departmentsByCategory]);
 
   const userOptionsById = useMemo(
     () => new Map(userOptions.map((option) => [option.id, option])),
@@ -379,7 +420,14 @@ export function AddMemberDialog({
               <FormField label="Transfer Date" type="date" required value={f("transferDate")} onChange={onChange("transferDate")} />
               <FormField label="Reason for Transfer" type="select" options={["Relocation", "Job Change", "Family Reasons", "Church Growth", "Other"]} value={f("transferReason")} onChange={onChange("transferReason")} />
               <FormField label="Membership Date" type="date" value={f("membershipDate")} onChange={onChange("membershipDate")} />
-              <FormField label="Department(s)" placeholder="Current departments" value={f("departments")} onChange={onChange("departments")} />
+              <FormField 
+                  label="Department(s)" 
+                  type="select" 
+                  options={departmentOptions}
+                  placeholder="Select departments"
+                  value={f("departments")} 
+                  onChange={onChange("departments")} 
+                />
             </div>
             <div>
               <label className="block text-sm font-medium text-foreground mb-1.5">Transfer Notes</label>
@@ -407,7 +455,15 @@ export function AddMemberDialog({
                 <FormField label="Member Status" type="select" options={["Active", "Inactive", "Visitor"]} value={f("memberStatus")} onChange={onChange("memberStatus")} />
                 <FormField label="Baptism Status" type="select" options={["Baptized", "Not Baptized"]} value={f("baptismStatus")} onChange={onChange("baptismStatus")} />
                 <FormField label="Worker Status" type="select" options={["Worker", "Non-Worker"]} value={f("workerStatus")} onChange={onChange("workerStatus")} />
-                <FormField label="Department(s)" placeholder="Search departments..." className="sm:col-span-2" value={f("departments")} onChange={onChange("departments")} />
+                <FormField 
+                  label="Department(s)" 
+                  type="select" 
+                  options={departmentOptions}
+                  placeholder="Select departments"
+                  className="sm:col-span-2"
+                  value={f("departments")} 
+                  onChange={onChange("departments")} 
+                />
               </div>
             )}
 
@@ -546,6 +602,17 @@ function FormField({
         >
           <option value="">Select {label}</option>
           {options?.map((o) => {
+            // Check if this is a category header (starts with ---)
+            const isCategoryHeader = o.startsWith("---") && o.endsWith("---");
+            
+            if (isCategoryHeader) {
+              return (
+                <option key={o} value="" disabled style={{ fontWeight: 'bold', color: '#666' }}>
+                  {o}
+                </option>
+              );
+            }
+            
             if (!useOptionValue) {
               return <option key={o} value={o}>{o}</option>;
             }

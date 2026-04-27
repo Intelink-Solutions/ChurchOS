@@ -30,6 +30,16 @@ const adminMenuItems = [
   { title: "Public Website", icon: Globe, path: "/website" },
 ];
 
+const superAdminMenuItems = [
+  { title: "System Dashboard", icon: LayoutDashboard, path: "/" },
+  { title: "Church Management", icon: Building2, path: "/churches", permission: "churches:read" as Permission },
+  { title: "User Management", icon: Users, path: "/reports" },
+  { title: "Financial Oversight", icon: DollarSign, path: "/analytics" },
+  { title: "System Reports", icon: BarChart3, path: "/reports", permission: "reports:read" as Permission },
+  { title: "System Settings", icon: Settings, path: "/settings", permission: "settings:read" as Permission },
+  { title: "Audit Logs", icon: ClipboardList, path: "/admin/audit-logs", permission: "auditlogs:read" as Permission },
+];
+
 const memberMenuItems = [
   { title: "Dashboard", icon: LayoutDashboard, path: "/" },
   { title: "My Profile", icon: User, path: "/profile" },
@@ -40,14 +50,26 @@ const memberMenuItems = [
 ];
 
 export function AppSidebar() {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("sidebar-collapsed");
+      return saved === "true";
+    }
+    return false;
+  });
   const location = useLocation();
   const { user, hasPermission } = useAuth();
 
-  // Default to member menu if user is not loaded yet
-  const menuItems = user?.role === "admin"
-    ? adminMenuItems.filter((item) => !item.permission || hasPermission(item.permission))
-    : memberMenuItems;
+  // Determine menu items based on user role
+  let menuItems;
+  if (user?.roleCode === "SUPER_ADMIN") {
+    menuItems = superAdminMenuItems.filter((item) => !item.permission || hasPermission(item.permission));
+  } else if (user?.roleCode === "ADMIN") {
+    // For ADMIN role, show all admin menu items without permission filtering
+    menuItems = adminMenuItems;
+  } else {
+    menuItems = memberMenuItems;
+  }
 
   return (
     <aside
@@ -92,7 +114,13 @@ export function AppSidebar() {
 
       {/* Collapse Toggle */}
       <button
-        onClick={() => setCollapsed(!collapsed)}
+        onClick={() => {
+          const newCollapsed = !collapsed;
+          setCollapsed(newCollapsed);
+          if (typeof window !== "undefined") {
+            localStorage.setItem("sidebar-collapsed", newCollapsed.toString());
+          }
+        }}
         className="flex items-center justify-center h-12 border-t border-sidebar-border text-sidebar-muted hover:text-sidebar-primary transition-colors"
       >
         {collapsed ? <ChevronRight className="h-5 w-5" /> : <ChevronLeft className="h-5 w-5" />}

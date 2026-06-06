@@ -1,19 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Plus, Search, Eye, Pencil, Trash2, Users, UserPlus, PhoneCall, ArrowRightLeft, ChevronLeft, ChevronRight, X, GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AddMemberDialog } from "@/components/members/AddMemberDialog";
+import { DepartmentProvider } from "@/components/departments/MockDepartmentDropdown";
+import { visitorsApi, type Visitor, type VisitorStats, type VisitorFollowUpStatus, type CreateVisitorRequest } from "@/lib/api/visitorsApi";
+import { toast } from "sonner";
 
-const mockVisitors = [
-  { id: "V001", name: "Rebecca Adamu", phone: "+234 810 111 2222", firstVisit: "2026-02-28", invitedBy: "Grace Adeyemi", followUp: "Contacted", prayerRequest: "Healing for family" },
-  { id: "V002", name: "James Nkemelu", phone: "+234 811 222 3333", firstVisit: "2026-03-02", invitedBy: "Daniel Okafor", followUp: "New Visitor", prayerRequest: "" },
-  { id: "V003", name: "Amara Obi", phone: "+234 812 333 4444", firstVisit: "2026-02-14", invitedBy: "—", followUp: "Invited to Service", prayerRequest: "Job search" },
-  { id: "V004", name: "Samuel Bello", phone: "+234 813 444 5555", firstVisit: "2026-01-19", invitedBy: "Joy Nwosu", followUp: "Attended Again", prayerRequest: "" },
-  { id: "V005", name: "Mercy Udo", phone: "+234 814 555 6666", firstVisit: "2026-01-05", invitedBy: "Esther Williams", followUp: "Converted to Member", prayerRequest: "Growth in faith" },
-  { id: "V006", name: "Chidi Okeke", phone: "+234 815 666 7777", firstVisit: "2026-03-01", invitedBy: "—", followUp: "New Visitor", prayerRequest: "Family unity" },
-];
-
-const kanbanStages = ["New Visitor", "Contacted", "Invited to Service", "Attended Again", "Converted to Member"] as const;
+const kanbanStages: VisitorFollowUpStatus[] = ["New Visitor", "Contacted", "Invited to Service", "Attended Again", "Converted to Member"];
 
 const stageColors: Record<string, string> = {
   "New Visitor": "border-l-accent",
@@ -31,27 +25,198 @@ const stageBadgeColors: Record<string, string> = {
   "Converted to Member": "bg-success/15 text-success",
 };
 
-type Tab = "table" | "pipeline" | "register";
+type Tab = "table" | "pipeline";
+
+// Phone number formatting and validation helpers
+const formatPhoneNumber = (value: string): string => {
+  // Remove all non-digit characters
+  const cleaned = value.replace(/\D/g, '');
+  
+  // If starts with 0 and has 11 digits (Nigeria format), convert to international
+  if (cleaned.startsWith('0') && cleaned.length === 11) {
+    return `+234${cleaned.substring(1)}`;
+  }
+  
+  // If starts with 234 and has 13 digits (already international), add +
+  if (cleaned.startsWith('234') && cleaned.length === 13) {
+    return `+${cleaned}`;
+  }
+  
+  // If starts with country code (1-3 digits), add +
+  if (cleaned.length >= 10 && cleaned.length <= 15) {
+    const firstDigits = cleaned.substring(0, 3);
+    // Common country codes
+    const countryCodes = ['1', '44', '234', '254', '27', '33', '49', '91', '86'];
+    const matchedCode = countryCodes.find(code => cleaned.startsWith(code));
+    if (matchedCode) {
+      return `+${cleaned}`;
+    }
+  }
+  
+  // Default: add + if it looks like a number
+  if (cleaned.length >= 10) {
+    return `+${cleaned}`;
+  }
+  
+  return value;
+};
+
+const validatePhoneNumber = (phone: string): boolean => {
+  // Check if phone is in international format
+  const internationalPhoneRegex = /^\+\d{10,15}$/;
+  return internationalPhoneRegex.test(phone);
+};
 
 export default function VisitorsPage() {
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<Tab>("table");
   const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [registerOpen, setRegisterOpen] = useState(false);
+  const [phoneError, setPhoneError] = useState("");
+  
+  // API state
+  const [visitors, setVisitors] = useState<Visitor[]>([]);
+  const [visitorStats, setVisitorStats] = useState<VisitorStats | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
 
-  const filtered = mockVisitors.filter((v) =>
+  // Registration form state
+  const [registrationForm, setRegistrationForm] = useState<CreateVisitorRequest>({
+    name: "",
+    phone: "",
+    email: "",
+    firstVisit: new Date().toISOString().split('T')[0], // Today's date
+    invitedBy: "",
+    prayerRequest: "",
+    address: "",
+    howDidYouHear: "",
+  });
+
+  const handleSaveMember = async () => {
+    // Simple handler for visitor page - just close the dialog
+    setAddMemberOpen(false);
+  };
+
+  // Visitor registration handler
+  const handleRegisterVisitor = async (formData: CreateVisitorRequest) => {
+    // Validate phone number before submission
+    if (!validatePhoneNumber(formData.phone)) {
+      setPhoneError("Phone number must be in international format (e.g., +2348000000000)");
+      toast.error("Please enter a valid phone number in international format");
+      return;
+    }
+
+    try {
+      await visitorsApi.createVisitor(formData);
+      toast.success("Visitor registered successfully!");
+      setRegisterOpen(false);
+      setPhoneError(""); // Clear phone error
+      // Reset form
+      setRegistrationForm({
+        name: "",
+        phone: "",
+        email: "",
+        firstVisit: new Date().toISOString().split('T')[0],
+        invitedBy: "",
+        prayerRequest: "",
+        address: "",
+        howDidYouHear: "",
+      });
+      loadVisitors(); // Reload visitors list
+      loadVisitorStats(); // Reload statistics
+    } catch (error) {
+      console.error("Failed to register visitor:", error);
+      toast.error("Failed to register visitor");
+    }
+  };
+
+  // Load visitors data
+  const loadVisitors = async () => {
+    setIsLoading(true);
+    setError("");
+    try {
+      // Debug: Check authentication state and permissions
+      const token = localStorage.getItem("churchos-access-token");
+      const user = localStorage.getItem("churchos-user");
+      const refreshToken = localStorage.getItem("churchos-refresh-token");
+      
+      console.log("=== AUTHENTICATION DEBUG ===");
+      console.log("Token exists:", !!token);
+      console.log("User exists:", !!user);
+      console.log("Refresh token exists:", !!refreshToken);
+      console.log("Token preview:", token ? `${token.substring(0, 20)}...` : "none");
+      
+      if (user) {
+        try {
+          const userObj = JSON.parse(user);
+          console.log("User role:", userObj.role);
+          console.log("User permissions:", userObj.permissions);
+          console.log("User data:", userObj);
+        } catch (e) {
+          console.log("User data (raw):", user);
+        }
+      }
+      console.log("=== END AUTH DEBUG ===");
+      
+      const response = await visitorsApi.getVisitors({
+        page,
+        size: 50,
+        search: search || undefined,
+      });
+      setVisitors(response.items);
+      setTotalPages(response.totalPages);
+    } catch (error) {
+      console.error("Failed to load visitors:", error);
+      setError("Failed to load visitors");
+      toast.error("Failed to load visitors");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Load visitor statistics
+  const loadVisitorStats = async () => {
+    try {
+      console.log("Debug - Loading visitor stats...");
+      const stats = await visitorsApi.getVisitorStats();
+      console.log("Debug - Visitor stats loaded:", stats);
+      setVisitorStats(stats);
+    } catch (error) {
+      console.error("Failed to load visitor stats:", error);
+      console.log("Stats error details:", error);
+    }
+  };
+
+  // Load data on component mount and when search/page changes
+  useEffect(() => {
+    loadVisitors();
+  }, [search, page]);
+
+  useEffect(() => {
+    loadVisitorStats();
+  }, []);
+
+  const filtered = visitors.filter((v) =>
     v.name.toLowerCase().includes(search.toLowerCase())
   );
 
-  const statCards = [
-    { label: "Total Visitors", value: mockVisitors.length, icon: Users, gradient: "stat-gradient-blue" },
-    { label: "First-Time This Week", value: 2, icon: UserPlus, gradient: "stat-gradient-gold" },
-    { label: "Follow-Ups Pending", value: 3, icon: PhoneCall, gradient: "stat-gradient-purple" },
-    { label: "Converted to Members", value: 1, icon: ArrowRightLeft, gradient: "stat-gradient-green" },
+  const statCards = visitorStats ? [
+    { label: "Total Visitors", value: visitorStats.totalVisitors, icon: Users, gradient: "stat-gradient-blue" },
+    { label: "First-Time This Week", value: visitorStats.firstTimeThisWeek, icon: UserPlus, gradient: "stat-gradient-gold" },
+    { label: "Follow-Ups Pending", value: visitorStats.followUpsPending, icon: PhoneCall, gradient: "stat-gradient-purple" },
+    { label: "Converted to Members", value: visitorStats.convertedToMembers, icon: ArrowRightLeft, gradient: "stat-gradient-green" },
+  ] : [
+    { label: "Total Visitors", value: 0, icon: Users, gradient: "stat-gradient-blue" },
+    { label: "First-Time This Week", value: 0, icon: UserPlus, gradient: "stat-gradient-gold" },
+    { label: "Follow-Ups Pending", value: 0, icon: PhoneCall, gradient: "stat-gradient-purple" },
+    { label: "Converted to Members", value: 0, icon: ArrowRightLeft, gradient: "stat-gradient-green" },
   ];
 
   return (
-    <DashboardLayout>
+    <DepartmentProvider>
+      <DashboardLayout>
       <div className="animate-fade-in">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
@@ -90,7 +255,7 @@ export default function VisitorsPage() {
 
         {/* Tabs */}
         <div className="flex gap-1 mb-6 bg-muted rounded-lg p-1 w-fit">
-          {([["table", "Visitor Table"], ["pipeline", "Follow-Up Pipeline"], ["register", "Registration Form"]] as const).map(([key, label]) => (
+          {([["table", "Visitor Table"], ["pipeline", "Follow-Up Pipeline"]] as const).map(([key, label]) => (
             <button
               key={key}
               onClick={() => setActiveTab(key as Tab)}
@@ -170,7 +335,7 @@ export default function VisitorsPage() {
                 </table>
               </div>
               <div className="flex items-center justify-between border-t border-border px-4 py-3">
-                <p className="text-xs text-muted-foreground">Showing {filtered.length} of {mockVisitors.length} visitors</p>
+                <p className="text-xs text-muted-foreground">Showing {filtered.length} of {visitors.length} visitors</p>
                 <div className="flex items-center gap-1">
                   <button className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted transition-colors"><ChevronLeft className="h-4 w-4" /></button>
                   <button className="rounded-lg px-3 py-1 text-sm font-medium bg-primary text-primary-foreground">1</button>
@@ -185,15 +350,15 @@ export default function VisitorsPage() {
         {activeTab === "pipeline" && (
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
             {kanbanStages.map((stage) => {
-              const visitors = mockVisitors.filter((v) => v.followUp === stage);
+              const stageVisitors = visitors.filter((v) => v.followUp === stage);
               return (
                 <div key={stage} className="rounded-xl bg-muted/50 p-3">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">{stage}</h3>
-                    <span className="rounded-full bg-card px-2 py-0.5 text-xs font-medium text-muted-foreground card-shadow">{visitors.length}</span>
+                    <span className="rounded-full bg-card px-2 py-0.5 text-xs font-medium text-muted-foreground card-shadow">{stageVisitors.length}</span>
                   </div>
                   <div className="space-y-2">
-                    {visitors.map((v) => (
+                    {stageVisitors.map((v) => (
                       <div key={v.id} className={cn("rounded-lg bg-card p-3 card-shadow hover:card-shadow-hover transition-shadow cursor-grab border-l-4", stageColors[stage])}>
                         <div className="flex items-start justify-between mb-1">
                           <div className="flex items-center gap-2">
@@ -216,7 +381,7 @@ export default function VisitorsPage() {
                         )}
                       </div>
                     ))}
-                    {visitors.length === 0 && (
+                    {stageVisitors.length === 0 && (
                       <div className="rounded-lg border-2 border-dashed border-border p-4 text-center">
                         <p className="text-xs text-muted-foreground">No visitors</p>
                       </div>
@@ -228,39 +393,7 @@ export default function VisitorsPage() {
           </div>
         )}
 
-        {/* Registration Form */}
-        {activeTab === "register" && (
-          <div className="max-w-2xl">
-            <div className="rounded-xl bg-card p-6 card-shadow">
-              <h2 className="font-display text-lg font-bold text-foreground mb-5">Visitor Registration</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <RegField label="Full Name" placeholder="Enter full name" className="sm:col-span-2" />
-                <RegField label="Phone" placeholder="+234 800 000 0000" />
-                <RegField label="Email" placeholder="email@example.com" />
-                <RegField label="Address" placeholder="Enter address" className="sm:col-span-2" />
-                <RegField label="First Visit Date" type="date" />
-                <RegField label="How did you hear about the church?" type="select" options={["Friend/Family", "Social Media", "Walk-In", "Flyer/Banner", "Other"]} />
-                <RegField label="Interested Department" type="select" options={["Choir", "Youth Ministry", "Media Team", "Ushers", "Children Ministry", "Evangelism", "None"]} />
-                <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium text-foreground mb-1.5">Prayer Request</label>
-                  <textarea rows={3} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20" placeholder="Any prayer requests..." />
-                </div>
-              </div>
-              <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-border">
-                <button className="rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-foreground hover:bg-muted transition-colors">Cancel</button>
-                <button className="rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors">Register Visitor</button>
-                <button
-                  onClick={() => setAddMemberOpen(true)}
-                  className="rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-accent-foreground hover:bg-accent/90 transition-colors"
-                >
-                  Register & Convert to Member
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
-
       {/* Register Visitor Modal */}
       {registerOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -271,21 +404,147 @@ export default function VisitorsPage() {
               <button onClick={() => setRegisterOpen(false)} className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted transition-colors"><X className="h-5 w-5" /></button>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <RegField label="Full Name" placeholder="Enter full name" className="sm:col-span-2" />
-              <RegField label="Phone" placeholder="+234 800 000 0000" />
-              <RegField label="Email" placeholder="email@example.com" />
-              <RegField label="How did you hear about us?" type="select" options={["Friend/Family", "Social Media", "Walk-In", "Other"]} className="sm:col-span-2" />
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-foreground mb-1.5">Full Name *</label>
+                <input
+                  type="text"
+                  value={registrationForm.name}
+                  onChange={(e) => setRegistrationForm({ ...registrationForm, name: e.target.value })}
+                  placeholder="Enter full name"
+                  className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1.5">Phone *</label>
+                <input
+                  type="tel"
+                  value={registrationForm.phone}
+                  onChange={(e) => {
+                    const formattedPhone = formatPhoneNumber(e.target.value);
+                    setRegistrationForm({ ...registrationForm, phone: formattedPhone });
+                    
+                    // Validate phone number
+                    if (formattedPhone && !validatePhoneNumber(formattedPhone)) {
+                      setPhoneError("Please enter an international phone number (e.g., +2348000000000)");
+                    } else {
+                      setPhoneError("");
+                    }
+                  }}
+                  placeholder="+234 800 000 0000"
+                  className={`h-10 w-full rounded-lg border px-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 ${
+                    phoneError 
+                      ? "border-red-500 focus:ring-red-500/20" 
+                      : "border-input"
+                  }`}
+                  required
+                />
+                {phoneError && (
+                  <p className="text-xs text-red-500 mt-1">{phoneError}</p>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1.5">Email</label>
+                <input
+                  type="email"
+                  value={registrationForm.email}
+                  onChange={(e) => setRegistrationForm({ ...registrationForm, email: e.target.value })}
+                  placeholder="email@example.com"
+                  className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-foreground mb-1.5">Address</label>
+                <input
+                  type="text"
+                  value={registrationForm.address}
+                  onChange={(e) => setRegistrationForm({ ...registrationForm, address: e.target.value })}
+                  placeholder="Enter address"
+                  className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-foreground mb-1.5">First Visit Date</label>
+                <input
+                  type="date"
+                  value={registrationForm.firstVisit}
+                  onChange={(e) => setRegistrationForm({ ...registrationForm, firstVisit: e.target.value })}
+                  className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-foreground mb-1.5">How did you hear about the church?</label>
+                <select
+                  value={registrationForm.howDidYouHear}
+                  onChange={(e) => setRegistrationForm({ ...registrationForm, howDidYouHear: e.target.value })}
+                  className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring/20"
+                >
+                  <option value="">Select...</option>
+                  <option value="Friend/Family">Friend/Family</option>
+                  <option value="Social Media">Social Media</option>
+                  <option value="Walk-In">Walk-In</option>
+                  <option value="Flyer/Banner">Flyer/Banner</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1.5">Invited By</label>
+                <input
+                  type="text"
+                  value={registrationForm.invitedBy}
+                  onChange={(e) => setRegistrationForm({ ...registrationForm, invitedBy: e.target.value })}
+                  placeholder="Who invited you?"
+                  className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-foreground mb-1.5">Prayer Request</label>
+                <textarea
+                  rows={3}
+                  value={registrationForm.prayerRequest}
+                  onChange={(e) => setRegistrationForm({ ...registrationForm, prayerRequest: e.target.value })}
+                  placeholder="Any prayer requests..."
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20"
+                />
+              </div>
             </div>
-            <div className="flex justify-end gap-2 mt-5 pt-4 border-t border-border">
-              <button onClick={() => setRegisterOpen(false)} className="rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-foreground hover:bg-muted transition-colors">Cancel</button>
-              <button className="rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors">Save Visitor</button>
+            <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-border">
+              <button 
+                onClick={() => setRegisterOpen(false)} 
+                className="rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-foreground hover:bg-muted transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={() => handleRegisterVisitor(registrationForm)} 
+                disabled={!registrationForm.name || !registrationForm.phone || phoneError !== ""}
+                className="rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary"
+              >
+                Register Visitor
+              </button>
+              <button
+                onClick={() => {
+                  handleRegisterVisitor(registrationForm);
+                  setAddMemberOpen(true);
+                }}
+                disabled={!registrationForm.name || !registrationForm.phone || phoneError !== ""}
+                className="rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-accent-foreground hover:bg-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-accent"
+              >
+                Register & Convert to Member
+              </button>
             </div>
+            {phoneError && (
+              <div className="mt-2 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded p-2">
+                <strong>Phone Format Required:</strong> Please enter an international phone number starting with + (e.g., +2348000000000)
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      <AddMemberDialog open={addMemberOpen} onOpenChange={setAddMemberOpen} initialType="New Member" />
+      <AddMemberDialog open={addMemberOpen} onOpenChange={setAddMemberOpen} onSave={handleSaveMember} initialType="New Member" />
     </DashboardLayout>
+    </DepartmentProvider>
   );
 }
 
